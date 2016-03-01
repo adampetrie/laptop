@@ -1,3 +1,5 @@
+**This is a modified version of the original laptop script that uses bash and install bash-it.**
+
 Laptop
 ======
 
