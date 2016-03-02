@@ -88,21 +88,6 @@ brew_expand_alias() {
   brew info "$1" 2>/dev/null | head -1 | awk '{gsub(/.*\//, ""); gsub(/:/, ""); print $1}'
 }
 
-brew_launchctl_restart() {
-  local name
-  name="$(brew_expand_alias "$1")"
-  local domain="homebrew.mxcl.$name"
-  local plist="$domain.plist"
-
-  mkdir -p "$HOME/Library/LaunchAgents"
-  ln -sfv "/usr/local/opt/$name/$plist" "$HOME/Library/LaunchAgents"
-
-  if launchctl list | grep -Fq "$domain"; then
-    launchctl unload "$HOME/Library/LaunchAgents/$plist" >/dev/null
-  fi
-  launchctl load "$HOME/Library/LaunchAgents/$plist" >/dev/null
-}
-
 gem_install_or_update() {
   if gem list "$1" --installed > /dev/null; then
     gem update "$@"
@@ -130,58 +115,49 @@ if brew list | grep -Fq brew-cask; then
   brew uninstall --force brew-cask
 fi
 
-# fancy_echo "Updating Homebrew formulae ..."
-# brew_tap 'thoughtbot/formulae'
-
 brew update
 
-fancy_echo "Updating Unix tools ..."
+fancy_echo "Installing required packages..."
 brew_install_or_upgrade 'git'
-brew_install_or_upgrade 'openssl'
-brew_install_or_upgrade 'the_silver_searcher'
-
-fancy_echo "Updating GitHub tools ..."
-brew_install_or_upgrade 'hub'
-
-fancy_echo "Updating image tools ..."
-brew_install_or_upgrade 'imagemagick'
-
-fancy_echo "Updating testing tools ..."
-brew_install_or_upgrade 'qt'
-
-fancy_echo "Updating programming languages ..."
-brew_install_or_upgrade 'libyaml' # should come after openssl
 brew_install_or_upgrade 'node'
-brew_install_or_upgrade 'rbenv'
-brew_install_or_upgrade 'ruby-build'
+brew_install_or_upgrade 'phantomjs'
 
-fancy_echo "Updating databases ..."
-brew_install_or_upgrade 'mysql'
-brew_install_or_upgrade 'redis'
-# brew_launchctl_restart 'mysql'
-# brew_launchctl_restart 'redis'
+fancy_echo "Tapping some required formulae..."
+brew_tap 'homebrew/versions'
+brew_tap 'homebrew/dupes'
 
-fancy_echo "Configuring Ruby ..."
-find_latest_ruby() {
-  rbenv install -l | grep -v - | tail -1 | sed -e 's/^ *//'
-}
+fancy_echo "Installing GCC 4.2..."
+brew install homebrew/dupes/apple-gcc42
+sudo ln -nsf $(which gcc-4.2) /usr/bin/gcc-4.2
 
-ruby_version="$(find_latest_ruby)"
-# shellcheck disable=SC2016
-append_to_bashrc 'eval "$(rbenv init - --no-rehash)"' 1
-eval "$(rbenv init -)"
+fancy_echo "Installing MySQL 5.6..."
+brew install mysql56
 
-if ! rbenv versions | grep -Fq "$ruby_version"; then
-  RUBY_CONFIGURE_OPTS=--with-openssl-dir=/usr/local/opt/openssl rbenv install -s "$ruby_version"
+if [ ! -f '/etc/my.cnf' ]; then
+  fancy_echo "Manual edits to /etc/my.cnf required. See: https://confluence.wishabi.com/pages/viewpage.action?pageId=18253291"
+  cp /usr/local/Cellar/mysql56/5.6.29/support-files/my-default /etc/my.cnf
 fi
 
-rbenv global "$ruby_version"
-rbenv shell "$ruby_version"
-gem update --system
-gem_install_or_update 'bundler'
-gem_install_or_update 'rubocop'
-number_of_cores=$(sysctl -n hw.ncpu)
-bundle config --global jobs $((number_of_cores - 1))
+append_to_bashrc 'export PATH="/usr/local/mysql/bin":$PATH'
+append_to_bashrc 'export DYLD_LIBRARY_PATH="/usr/local/mysql/lib:$DYLD_LIBRARY_PATH"'
+fancy_echo mysql --version
+
+if ! command -v search >/dev/null; then
+  fancy_echo "Installing Sphinx..."
+  cd ~/Downloads && { curl --remote-name http://sphinxsearch.com/files/sphinx-2.1.4-release.tar.gz; cd-;}
+  tar xvf ~/Downloads/sphinx-2.1.4-release.tar.gz
+  cd ~/Downloads/sphinx-2.1.4-release.tar.gz && { ./configure; make install; cd-;}
+  fancy_echo search --version
+fi
+
+if [ ! -d "$HOME/.rvm/"]; then
+  fancy_echo "Installing RVM..."
+  bash -s master < <(curl -s https://raw.githubusercontent.com/wayneeseguin/rvm/master/binscripts/rvm-installer)
+fi
+
+rvm install 2.0.0
+rvm use 2.0.0
+gem_install_or_update bundler
 
 if [ ! -d "$HOME/.bash_it/" ]; then
   fancy_echo "Installing Bash-it..."
