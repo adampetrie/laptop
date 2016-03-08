@@ -1,5 +1,7 @@
 **This is a modified version of the original laptop script that uses bash and installs bash-it.**
 
+Ticket branch 2 change
+
 Laptop
 ======
 
